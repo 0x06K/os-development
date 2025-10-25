@@ -9,9 +9,7 @@ void kmain(void) {
 
     // 2. Initialize VGA for on-screen messages
     vga_initialize();
-
-    vga_writestring("Entered protected mode successfully!\n");
-    vga_writestring("Kernel is now running.\n");
+    serial_write_string("[+] VGA initialized.", VGA_COLOR_GREEN);
 
     // 4. Halt CPU
     for (;;)
