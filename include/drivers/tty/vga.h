@@ -30,7 +30,7 @@ void vga_clear(void);
 void vga_putchar(char c);
 
 // Write a string (null-terminated)
-void vga_writestring(const char *str, uint8_t color);
+void vga_writestring(const char *str, uint8_t color = VGA_COLOR_WHITE);
 
 //  scroll screen
 void vga_scroll(void);
