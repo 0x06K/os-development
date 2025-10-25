@@ -70,10 +70,17 @@ $(IMG): $(BOOT_BIN) $(KERNEL_BIN)
 # Run in QEMU
 # -------------------------------
 run: $(IMG)
+	qemu-system-i386 -drive format=raw,file=$(IMG) --no-shutdown --no-reboot 
+
+# -------------------------------
+# Run and Debug
+# -------------------------------
+debug: $(IMG)
 	qemu-system-i386 -drive format=raw,file=$(IMG) --no-shutdown --no-reboot -s -S
 
 # -------------------------------
 # Clean build
 # -------------------------------
+
 clean:
 	rm -rf $(OUT_DIR)
