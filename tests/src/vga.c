@@ -41,7 +41,7 @@ void vga_putchar(char c) {
             vga_row++;
         }
     }
-    if (vga_row >= VGA_HEIGHT) scroll();
+    if (vga_row >= VGA_HEIGHT) vga_scroll();
 }
 
 void vga_scroll(void) {
