@@ -41,7 +41,7 @@ void vga_putchar(char c) {
             vga_row++;
         }
     }
-    if (vga_row >= VGA_HEIGHT) scroll();
+    if (vga_row >= VGA_HEIGHT) vga_scroll();
 }
 
 void vga_scroll(void) {
@@ -56,7 +56,7 @@ void vga_scroll(void) {
     }
     vga_row = VGA_HEIGHT - 1;
 }
-void vga_writestring(const char *str, uint8_t color = VGA_COLOR_WHITE) {
+void vga_writestring(const char *str) {
     while (*str) {
         vga_putchar(*str++);
     }
