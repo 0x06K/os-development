@@ -9,7 +9,8 @@ void kmain(void) {
 
     // 2. Initialize VGA for on-screen messages
     vga_initialize();
-    vga_writestring("[+] VGA initialized.", VGA_COLOR_GREEN);
+    vga_setcolor(VGA_COLOR_GREEN);
+    vga_writestring("[+] VGA initialized.");
 
     // 4. Halt CPU
     for (;;)
