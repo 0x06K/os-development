@@ -1,11 +1,37 @@
-OUTPUT_FORMAT(elf32-i386)
+/* linker.ld */
+
 ENTRY(kmain)
 
 SECTIONS
 {
-    . = 0x100000;       /* load kernel at 1 MB */
-    .text : { *(.text*) }
-    .rodata : { *(.rodata*) }
-    .data : { *(.data*) }
-    .bss : { *(.bss*) }
+    /* Kernel loaded at 1MB physical address */
+    . = 0x00010000;
+
+    .text ALIGN(4K) : {
+        *(.text)
+        *(.text.*)
+    }
+
+    .rodata ALIGN(4K) : {
+        *(.rodata)
+        *(.rodata.*)
+    }
+
+    .data ALIGN(4K) : {
+        *(.data)
+        *(.data.*)
+    }
+
+    .bss ALIGN(4K) : {
+        *(COMMON)
+        *(.bss)
+        *(.bss.*)
+    }
+
+    /* Discard unnecessary sections */
+    /DISCARD/ : {
+        *(.comment)
+        *(.note*)
+        *(.eh_frame)
+    }
 }

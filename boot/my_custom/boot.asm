@@ -69,7 +69,7 @@ protected_mode:
     mov esp, ebp
     
     ; Jump to kernel entry point
-    jmp 0x08:0x10000
+    jmp 0x10000
 
 ; -------------------------
 ; Back to 16-bit for error handling
