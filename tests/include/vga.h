@@ -32,6 +32,9 @@ void vga_putchar(char c);
 // Write a string (null-terminated)
 void vga_writestring(const char *str);
 
+//  scroll screen
+void vga_scroll(void);
+
 // Set text color
 void vga_setcolor(uint8_t color);
 

@@ -19,7 +19,9 @@ void vga_initialize(void) {
 
 void vga_clear(void) {
     for (int y = 0; y < VGA_HEIGHT; y++) {
+
         for (int x = 0; x < VGA_WIDTH; x++) {
+
             vga_buffer[y * VGA_WIDTH + x] = vga_entry(' ', vga_color);
         }
     }
@@ -39,21 +41,21 @@ void vga_putchar(char c) {
             vga_row++;
         }
     }
-    
-    if (vga_row >= VGA_HEIGHT) {
-        // Scroll
-        for (int y = 0; y < VGA_HEIGHT - 1; y++) {
-            for (int x = 0; x < VGA_WIDTH; x++) {
-                vga_buffer[y * VGA_WIDTH + x] = vga_buffer[(y + 1) * VGA_WIDTH + x];
-            }
-        }
-        for (int x = 0; x < VGA_WIDTH; x++) {
-            vga_buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = vga_entry(' ', vga_color);
-        }
-        vga_row = VGA_HEIGHT - 1;
-    }
+    if (vga_row >= VGA_HEIGHT) scroll();
 }
 
+void vga_scroll(void) {
+    // Scroll
+    for (int y = 0; y < VGA_HEIGHT - 1; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            vga_buffer[y * VGA_WIDTH + x] = vga_buffer[(y + 1) * VGA_WIDTH + x];
+        }
+    }
+    for (int x = 0; x < VGA_WIDTH; x++) {
+        vga_buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = vga_entry(' ', vga_color);
+    }
+    vga_row = VGA_HEIGHT - 1;
+}
 void vga_writestring(const char *str) {
     while (*str) {
         vga_putchar(*str++);
