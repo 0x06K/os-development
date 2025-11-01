@@ -1,6 +1,6 @@
 #include "vga.h"
 #include "serial.h"
-
+#include "gdt.h"
 void kmain(void) {
     // 1. Initialize serial port first — so we can log immediately
     // my dear me this is something that you don't need to focus on.
@@ -10,7 +10,11 @@ void kmain(void) {
     // 2. Initialize VGA for on-screen messages
     vga_initialize();
     vga_setcolor(VGA_COLOR_GREEN);
-    vga_writestring("[+] VGA initialized.");
+    vga_writestring("[+] VGA initialized.\n");
+    
+    // 3. setup the GDT.
+    gdt_init();
+    vga_writestring("[+] GDT initialized.\n");
 
     // 4. Halt CPU
     for (;;)
