@@ -1,55 +1,55 @@
 #!/bin/bash
+set -e
 
-# Directories
-OUT_DIR="build/i686"
-mkdir -p $OUT_DIR
+# Config
+ARCH="i686"
+BUILD="build/$ARCH"
+SRC="src"
+INC="include"
 
-# File names
-BOOT=boot.asm
-KERNEL_C=src/kmain.c
-KERNEL_ELF=$OUT_DIR/kernel.elf
-KERNEL_BIN=$OUT_DIR/kernel.bin
-IMG=$OUT_DIR/kernel.img
-OBJ_C=$OUT_DIR/kernel_c.o
+# Source files
+ASM_FILES=("boot.asm" "gdt.asm")
+C_FILES=("kmain.c" "console.c" "gdt.c" "serial.c" "vga.c")
 
-# -------------------------------
-# Assemble bootloader (512 bytes)
-# -------------------------------
-nasm -f bin $BOOT -o $OUT_DIR/boot.bin
 
-# -------------------------------
-# Compile kernel C
-# -------------------------------
-i686-linux-gnu-gcc -ffreestanding -ffunction-sections -g -O2 -Wall -Wextra -c $KERNEL_C -o $OBJ_C -Iinclude
+# Flags
+CFLAGS="-ffreestanding -m32 -O2 -Wall -Wextra -I$INC -g"
+LDFLAGS="-T link.ld -nostdlib -ffreestanding -Wl,--build-id=none -no-pie"
 
-# -------------------------------
-# Link kernel to ELF
-# -------------------------------
-i686-linux-gnu-ld -T linker.ld -nostdlib -o $KERNEL_ELF $OBJ_C
+# Clean
+echo "[1/4] Cleaning..."
+rm -rf "$BUILD" && mkdir -p "$BUILD"
 
-# -------------------------------
-# Convert ELF to raw binary
-# -------------------------------
-i686-linux-gnu-objcopy -O binary $KERNEL_ELF $KERNEL_BIN
+# Assemble
+echo "[2/4] Assembling..."
+for asm in "${ASM_FILES[@]}"; do
+    base="${asm%.asm}"
+    if [[ "$base" == "boot" ]]; then
+        nasm -f bin "$SRC/$asm" -o "$BUILD/$base.bin"
+    else
+        nasm -f elf32 "$SRC/$asm" -o "$BUILD/${base}_flush.o"
+    fi
+done
 
-# -------------------------------
-# Create bootable .img
-# -------------------------------
-# 2 MB blank image
-dd if=/dev/zero of=$IMG bs=512 count=4096
+# Compile
+echo "[3/4] Compiling..."
+for c in "${C_FILES[@]}"; do
+    base="${c%.c}"
+    i686-linux-gnu-gcc $CFLAGS -c "$SRC/$c" -o "$BUILD/$base.o"
+done
 
-# Write bootloader first
-dd if=$OUT_DIR/boot.bin of=$IMG conv=notrunc
+# Link
+i686-linux-gnu-gcc $LDFLAGS -o "$BUILD/kernel.elf" "$BUILD"/*.o
+objcopy -O binary "$BUILD/kernel.elf" "$BUILD/kernel.bin"
 
-# Write kernel binary after 1 sector
-dd if=$KERNEL_BIN of=$IMG bs=512 seek=1 conv=notrunc
+# Create bootable image
+echo "[4/4] Creating bootable image..."
+cat "$BUILD/boot.bin" "$BUILD/kernel.bin" > "$BUILD/os.img"
 
-echo "[*] Bootable raw image created: $IMG"
-KERNEL_SECTORS=$(( ( $(stat -c%s $OUT_DIR/kernel.bin) + 511 ) / 512 ))
-echo "Kernel size: $KERNEL_SECTORS sectors"
+echo "✅ Built: $BUILD/os.img"
+echo "🐛 Debug symbols: $BUILD/kernel.elf"
 
-# -------------------------------
-# Boot in QEMU
-# -------------------------------
-qemu-system-i386 -drive format=raw,file=$IMG --no-shutdown
-#qemu-system-i386 -drive format=raw,file=$IMG --no-shutdown --no-reboot -s -S
+# Run
+[ "$1" = "run" ] && qemu-system-i386 -drive format=raw,file="build/i686/os.img" -s -S &
+
+# Use with: gdb build/i686/kernel.elf -ex "target remote :1234"

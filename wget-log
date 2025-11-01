@@ -1,0 +1,9 @@
+--2025-10-31 16:58:01--  https://ftp.gnu.org/gnu/gcc/gcc-15.2.0/gcc-15.2.0.tar.xz
+Resolving ftp.gnu.org (ftp.gnu.org)... 209.51.188.20, 2001:470:142:3::b
+Connecting to ftp.gnu.org (ftp.gnu.org)|209.51.188.20|:443... failed: Connection timed out.
+Connecting to ftp.gnu.org (ftp.gnu.org)|2001:470:142:3::b|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 101056276 (96M) [application/x-xz]
+Saving to: ‘gcc-15.2.0.tar.xz’
+
+gcc-15.2.0.tar.xz                                            1%[=>                                                                                                                                      ]   1.85M  --.-KB/s    eta 13h 44mgcc-15.2.0.tar.xz                                            1%[=>                                                                                                                                      ]   1.85M  4.00KB/s    eta 13h 42m

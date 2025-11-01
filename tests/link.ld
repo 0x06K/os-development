@@ -7,7 +7,8 @@ SECTIONS
     /* Kernel loaded at 1MB physical address */
     . = 0x00010000;
 
-    .text ALIGN(4K) : {
+    .text : {
+        */kmain.o(.text)     /* kernel.o's .text first */
         *(.text)
         *(.text.*)
     }

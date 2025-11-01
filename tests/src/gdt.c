@@ -3,6 +3,8 @@
 #include "gdt.h"
 #include<stdint.h>
 
+extern void gdt_flush(uint32_t);  // defined in ASM
+
 // GDT ENTRY
 typedef struct {
     uint16_t LimitLow;        // Segment limit (bits 0–15)
@@ -23,19 +25,19 @@ static GLOBAL_DISCRIPTOR_ENTRY gdt[GDT_ENTRIES];
 static GDT_PTR gdt_ptr;
 
 static void gdt_set_entry(int idx, uint32_t base, uint32_t limit,uint8_t access, uint8_t gran) {
-    gdt[idx].base_low        = base & 0xFFFF;
-    gdt[idx].base_mid        = (base >> 16) & 0xFF;
-    gdt[idx].base_high       = (base >> 24) & 0xFF;
+    gdt[idx].BaseLow        = base & 0xFFFF;
+    gdt[idx].BaseMiddle        = (base >> 16) & 0xFF;
+    gdt[idx].BaseHigh       = (base >> 24) & 0xFF;
 
-    gdt[idx].limit_low       = limit & 0xFFFF;
-    gdt[idx].limit_high_flags = ((limit >> 16) & 0x0F) | (gran & 0xF0);
+    gdt[idx].LimitLow       = limit & 0xFFFF;
+    gdt[idx].LimitHigh_Flags = ((limit >> 16) & 0x0F) | (gran & 0xF0);
 
-    gdt[idx].access          = access;
+    gdt[idx].Access          = access;
 }
 
 void gdt_init(void) {
-    gdt_ptr.limit = sizeof(gdt_entry_t) * GDT_ENTRIES - 1;
-    gdt_ptr.base  = (uint32_t)&gdt;
+    gdt_ptr.Limit = sizeof(GLOBAL_DISCRIPTOR_ENTRY) * GDT_ENTRIES - 1;
+    gdt_ptr.Base  = (uint32_t)&gdt;
 
     // Null descriptor
     gdt_set_entry(0, 0, 0, 0, 0);
