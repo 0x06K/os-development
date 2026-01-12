@@ -1,5 +1,6 @@
 ## os-development
 - **under construction :3**
+- for now it's barely a micro kernel you can run multiple tasks and i have setuped the interrupt table but haven't added any interrupt anyway adding interrupts won't take much time. just bored of it maybe will complete it someday.
 - just creating a tiny OS
 - mainly to understand exploit development from the ground up  
 - analyzing patterns in stable kernels would’ve been better, but studying OS this semester so...  
