@@ -2,7 +2,7 @@
 
 This script fetches the latest GCC and Binutils from the GNU FTP, builds them from source, and installs NASM, QEMU, GDB, and Make alongside them. When it's done, you have everything you need to write, assemble, link, and emulate an x86 OS.
 
----
+
 
 ## What It Installs
 
@@ -17,7 +17,7 @@ This script fetches the latest GCC and Binutils from the GNU FTP, builds them fr
 
 All binaries go to `/usr/local`. Source files build in `~/cross`.
 
----
+
 
 ## Requirements
 
@@ -25,7 +25,7 @@ All binaries go to `/usr/local`. Source files build in `~/cross`.
 - `sudo` access
 - Internet connection (downloads from ftp.gnu.org)
 
----
+
 
 ## Usage
 
@@ -44,7 +44,6 @@ The script will:
 
 GCC takes a while to compile. That's expected — go outside.
 
----
 
 ## Reinstall / Upgrade
 
@@ -52,7 +51,7 @@ Re-running the script on a machine that already has the toolchain will detect th
 - **Reinstall** (same version, reuses cached sources)
 - **Upgrade** (newer version available, downloads fresh)
 
----
+
 
 ## Verify Manually
 
@@ -65,7 +64,7 @@ nasm --version
 qemu-system-i386 --version
 ```
 
----
+
 
 ## Cleanup
 
