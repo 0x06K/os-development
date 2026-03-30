@@ -1,0 +1,2 @@
+https://jyywiki.cn/pages/OS/manuals/BIOS-interrupts.pdf
+https://www.ngpaws.com/downloads/dosvault/8086_bios_and_dos_interrupts.html
