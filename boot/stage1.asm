@@ -1,6 +1,7 @@
 [ORG 0x7C00]
 [BITS 16]
 
+;It performs a far jump to set CS = 0 and IP = offset of start
 jmp 0:start
 
 start:
@@ -74,7 +75,99 @@ start:
     mov [mem_entry_count], bp   ; save total entry count
 
 
+;=================================================================
+; ENTER PROTECTED MODE
+;=================================================================
 
+    ; ---------------------------------------------------------------
+    ; Load GDT into GDTR
+    ; ---------------------------------------------------------------
+    cli                             ; interrupts MUST be off before switching modes
+    lgdt [gdt_descriptor]           ; load GDT register — tells CPU where our GDT lives
+
+
+    ; ---------------------------------------------------------------
+    ; Set CR0.PE = 1 — this flips the CPU into protected mode
+    ; You cannot write CR0 directly; you must go through a GPR
+    ; ---------------------------------------------------------------
+    mov eax, cr0
+    or  eax, 0x1                    ; set bit 0 (Protection Enable)
+    mov cr0, eax
+
+
+    ; ---------------------------------------------------------------
+    ; Far jump — two purposes:
+    ;   1. Flushes the prefetch queue (CPU may have decoded real-mode
+    ;      instructions ahead — we need to discard them)
+    ;   2. Loads CS with our code segment selector (0x08 = GDT entry 1)
+    ;      A segment selector is: index<<3 | TI | RPL
+    ;      0x08 = 0000 0000 0000 1000 → index=1, TI=0 (GDT), RPL=0 (ring 0)
+    ; ---------------------------------------------------------------
+    jmp 0x08:protected_mode_entry   ; CS = 0x08, EIP = physical address of label below
+
+
+;=================================================================
+; WE ARE NOW IN 32-BIT PROTECTED MODE
+;=================================================================
+[BITS 32]
+
+protected_mode_entry:
+    ; ---------------------------------------------------------------
+    ; CS is set by the far jump above.
+    ; But DS, ES, FS, GS, SS still contain real-mode garbage selectors.
+    ; Load them all with our data segment selector: 0x10
+    ;   0x10 = index=2, TI=0, RPL=0 → gdt_data
+    ; ---------------------------------------------------------------
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+
+    ; ---------------------------------------------------------------
+    ; Set up a 32-bit stack below the kernel load address.
+    ; Kernel is at 0x10000. Anything below that and above 0x7E00
+    ; (end of bootloader) is safe. 0xC000 is a clean midpoint.
+    ; Stack grows DOWN so ESP = top of stack region.
+    ; ---------------------------------------------------------------
+    mov esp, 0x0000C000
+
+
+    ; ---------------------------------------------------------------
+    ; Jump to kernel loaded at physical address 0x10000
+    ; (segment 0x1000, offset 0x0000 from INT 13h DAP earlier)
+    ; In protected mode, 0x08 code segment is flat — base=0, limit=4GB
+    ; so physical address == logical offset directly.
+    ; ---------------------------------------------------------------
+    jmp 0x10000                     ; transfer control to your kernel entry point
+
+
+    ; ---------------------------------------------------------------
+    ; Should never reach here. Halt the CPU if we do.
+    ; ---------------------------------------------------------------
+    cli
+    hlt
+
+
+
+[BITS 16]
+
+
+;=================================================================
+; PRINT — prints null-terminated string pointed to by SI
+;=================================================================
+print:
+    mov ah, 0x0E                           ; BIOS teletype output function
+.loop:
+    lodsb                                  ; load byte at DS:SI into AL, advance SI
+    cmp al, 0                              ; check for null terminator
+    je  .done                              ; if null, we are done
+    int 0x10                              ; print character in AL
+    jmp .loop                              ; next character
+.done:
+    ret
 
 
 
@@ -120,24 +213,11 @@ gdt_descriptor:
     dd gdt_start                           ; linear base address of GDT
 
 
-;=================================================================
-; PRINT — prints null-terminated string pointed to by SI
-;=================================================================
-print:
-    mov ah, 0x0E                           ; BIOS teletype output function
-.loop:
-    lodsb                                  ; load byte at DS:SI into AL, advance SI
-    cmp al, 0                              ; check for null terminator
-    je  .done                              ; if null, we are done
-    int 0x10                              ; print character in AL
-    jmp .loop                              ; next character
-.done:
-    ret
 
 
 ;=================================================================
 ; PADDING + BOOT SIGNATURE
 ;=================================================================
-[BITS 16]
+
 times 510 - ($ - $$) db 0                 ; pad remaining bytes to reach byte 510
 dw 0xAA55                                 ; boot signature — BIOS checks this to confirm bootable disk
