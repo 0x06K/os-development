@@ -1,123 +1,116 @@
 [ORG 0x7C00]
 [BITS 16]
 
-;It performs a far jump to set CS = 0 and IP = offset of start
 jmp 0:start
 
 start:
-    cli                                     ; clear interrupts
-    xor ax, ax                              ; Zero out AX
-    mov ds, ax                              ; Data Segment = 0
-    mov es, ax                              ; Extra Segment = 0
-    mov ss, ax                              ; Stack Segment = 0
+    cli                         ; disable interrupts during setup
+    xor ax, ax
+    mov ds, ax                  ; zero all segments
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7C00              ; stack grows down from bootloader base
+    sti                         ; safe to re-enable interrupts now
 
-                                            ;===============================================================
-                                            ; stack grows downward. 0x0500−0x7BFF is guaranteed to be free.
-                                            ; this is roughly 30 KB which can be used for stack. so we ca
-    mov sp, 0x7C00                          ; the stack grows downward in x86. So if we set SP = 0x7C00
-                                            ; the stack doesn't start at 0x7C00 it starts just above it
-                                            ; PUSH instruction will decrement SP first to 0x7BFE.
-                                            ; and then write data there.
-                                            ;===============================================================
+    mov [boot_drive], dl        ; BIOS puts boot drive in DL, save it
 
-    sti                                     ; it will set interrupt flag
+    mov si, msg_start
+    call print
 
+    ; -------------------------------------------------------
+    ; INT 13h AH=41h — check if BIOS supports LBA extensions
+    ; BX=0x55AA is a magic number BIOS expects
+    ; if carry is set — no LBA support, we hang
+    ; -------------------------------------------------------
+    mov ah, 0x41
+    mov bx, 0x55AA
+    mov dl, [boot_drive]
+    int 0x13
+    jc  hang
 
+    mov si, msg_lba
+    call print
 
-    ; ---------------------------------------------------------------
-    ; Save boot drive number and Print Welcome Message
-    ; ---------------------------------------------------------------
-    mov [boot_drive], dl                   ; BIOS puts boot drive number in DL, will be used for reading kernel
-    mov si, welcome_msg                    ; point SI to welcome string
-    call print                             ; print it
+    ; -------------------------------------------------------
+    ; INT 13h AH=42h — extended read using DAP
+    ; DS:SI points to the Disk Address Packet (DAP)
+    ; DAP tells BIOS: read 1 sector from LBA 1 into 0x10000
+    ; we push/pop DS because INT 13h may clobber it
+    ; -------------------------------------------------------
+    push ds
+    mov ah, 0x42
+    mov dl, [boot_drive]
+    mov si, dap
+    int 0x13
+    pop ds
+    jc  hang                    ; carry set means read failed
 
+    mov si, msg_loaded
+    call print
 
-
-    ; ---------------------------------------------------------------
-    ; Load kernel into 0x10000 from sector 1
-    ; ---------------------------------------------------------------
-    push ds                                ; save DS, INT 13h may clobber it
-    mov ah, 0x42                           ; BIOS extended read function
-    mov dl, [boot_drive]                   ; drive to read from
-    mov si, dap                           ; DS:SI points to Disk Address Packet
-    int 0x13                               ; call BIOS — reads sectors into 0x10000
-    pop ds                                 ; restore DS after BIOS call
-
-
-
-    ; ---------------------------------------------------------------
-    ; Enabling A20
-    ; ---------------------------------------------------------------
-    mov ax, 0x2401              ; AH=0x24 function, AL=0x01 enable
+    ; -------------------------------------------------------
+    ; INT 15h AX=2401h — enable A20 line
+    ; without A20, address bit 20 is always 0
+    ; meaning memory wraps at 1MB — we need it open for PM
+    ; -------------------------------------------------------
+    mov ax, 0x2401
     int 0x15
 
+    mov si, msg_a20
+    call print
 
-
-    ; ---------------------------------------------------------------
-    ; Getting memory map via 0xE820
-    ; ---------------------------------------------------------------
-    xor ebx, ebx                ; EBX = 0, first call marker
-    xor bp, bp                  ; BP = 0, entry counter
+    ; -------------------------------------------------------
+    ; INT 15h EAX=E820h — query BIOS memory map
+    ; each call fills one 24-byte entry at ES:DI
+    ; EBX is a continuation token — 0 means last entry
+    ; EDX must hold magic 'SMAP' = 0x534D4150
+    ; BP counts how many entries we got
+    ; entries are stored at physical 0x0500 (buffer)
+    ; -------------------------------------------------------
+    xor ebx, ebx                ; first call: EBX must be 0
+    xor bp, bp                  ; entry counter
     mov edx, 0x534D4150         ; 'SMAP' magic
-    mov di, buffer              ; ES:DI points to buffer
+    mov di, buffer              ; ES:DI = destination
 
-.loop:
-    mov eax, 0xE820             ; reload — BIOS trashes EAX each call
-    mov ecx, 24                 ; reload — BIOS may trash ECX too
-    int 0x15                    ; write one entry at ES:DI
-    jc  .done                   ; carry = error or no more entries
-    add di, 24                  ; advance buffer to next slot
+.e820_loop:
+    mov eax, 0xE820             ; BIOS trashes EAX each call, reload
+    mov ecx, 24                 ; BIOS may trash ECX too, reload
+    int 0x15
+    jc  .e820_done              ; carry = error or list exhausted
+    add di, 24                  ; move to next entry slot
     inc bp                      ; count this entry
-    test ebx, ebx               ; EBX = 0 means last entry
-    jnz .loop                   ; more entries — go back
+    test ebx, ebx               ; EBX=0 means this was the last entry
+    jnz .e820_loop
 
-.done:
-    mov [mem_entry_count], bp   ; save total entry count
+.e820_done:
+    mov [mem_entry_count], bp   ; save count so kernel can find it
 
+    mov si, msg_mmap
+    call print
 
-;=================================================================
-; ENTER PROTECTED MODE
-;=================================================================
+    ; -------------------------------------------------------
+    ; switch to 32-bit protected mode
+    ; 1. interrupts must be off — IDT is not set up for PM yet
+    ; 2. load GDTR with our GDT
+    ; 3. set CR0 bit 0 (PE) to enter protected mode
+    ; 4. far jump to flush prefetch queue and load CS with
+    ;    code segment selector 0x08 (GDT entry 1)
+    ; -------------------------------------------------------
+    cli
+    lgdt [gdt_descriptor]       ; load GDT register
 
-    ; ---------------------------------------------------------------
-    ; Load GDT into GDTR
-    ; ---------------------------------------------------------------
-    cli                             ; interrupts MUST be off before switching modes
-    lgdt [gdt_descriptor]           ; load GDT register — tells CPU where our GDT lives
-
-
-    ; ---------------------------------------------------------------
-    ; Set CR0.PE = 1 — this flips the CPU into protected mode
-    ; You cannot write CR0 directly; you must go through a GPR
-    ; ---------------------------------------------------------------
     mov eax, cr0
-    or  eax, 0x1                    ; set bit 0 (Protection Enable)
+    or  eax, 0x1                ; set Protection Enable bit
     mov cr0, eax
 
-
-    ; ---------------------------------------------------------------
-    ; Far jump — two purposes:
-    ;   1. Flushes the prefetch queue (CPU may have decoded real-mode
-    ;      instructions ahead — we need to discard them)
-    ;   2. Loads CS with our code segment selector (0x08 = GDT entry 1)
-    ;      A segment selector is: index<<3 | TI | RPL
-    ;      0x08 = 0000 0000 0000 1000 → index=1, TI=0 (GDT), RPL=0 (ring 0)
-    ; ---------------------------------------------------------------
-    jmp 0x08:protected_mode_entry   ; CS = 0x08, EIP = physical address of label below
+    jmp 0x08:protected_mode_entry   ; CS = 0x08, flush pipeline
 
 
-;=================================================================
-; WE ARE NOW IN 32-BIT PROTECTED MODE
-;=================================================================
 [BITS 32]
 
 protected_mode_entry:
-    ; ---------------------------------------------------------------
-    ; CS is set by the far jump above.
-    ; But DS, ES, FS, GS, SS still contain real-mode garbage selectors.
-    ; Load them all with our data segment selector: 0x10
-    ;   0x10 = index=2, TI=0, RPL=0 → gdt_data
-    ; ---------------------------------------------------------------
+    ; CS is already set by the far jump above
+    ; load all data segments with data selector 0x10 (GDT entry 2)
     mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -125,99 +118,78 @@ protected_mode_entry:
     mov gs, ax
     mov ss, ax
 
+    mov esp, 0x0000C000         ; set up 32-bit stack below kernel
 
-    ; ---------------------------------------------------------------
-    ; Set up a 32-bit stack below the kernel load address.
-    ; Kernel is at 0x10000. Anything below that and above 0x7E00
-    ; (end of bootloader) is safe. 0xC000 is a clean midpoint.
-    ; Stack grows DOWN so ESP = top of stack region.
-    ; ---------------------------------------------------------------
-    mov esp, 0x0000C000
+    jmp 0x10000                 ; jump to kernel entry point
 
 
-    ; ---------------------------------------------------------------
-    ; Jump to kernel loaded at physical address 0x10000
-    ; (segment 0x1000, offset 0x0000 from INT 13h DAP earlier)
-    ; In protected mode, 0x08 code segment is flat — base=0, limit=4GB
-    ; so physical address == logical offset directly.
-    ; ---------------------------------------------------------------
-    jmp 0x10000                     ; transfer control to your kernel entry point
-
-
-    ; ---------------------------------------------------------------
-    ; Should never reach here. Halt the CPU if we do.
-    ; ---------------------------------------------------------------
+hang:
     cli
-    hlt
-
+    hlt                         ; something went wrong — freeze
 
 
 [BITS 16]
 
-
-;=================================================================
-; PRINT — prints null-terminated string pointed to by SI
-;=================================================================
+; -------------------------------------------------------
+; print — prints null-terminated string pointed to by SI
+; uses BIOS INT 10h AH=0Eh teletype output
+; -------------------------------------------------------
 print:
-    mov ah, 0x0E                           ; BIOS teletype output function
+    mov ah, 0x0E
 .loop:
-    lodsb                                  ; load byte at DS:SI into AL, advance SI
-    cmp al, 0                              ; check for null terminator
-    je  .done                              ; if null, we are done
-    int 0x10                              ; print character in AL
-    jmp .loop                              ; next character
+    lodsb                       ; load byte at DS:SI into AL, advance SI
+    cmp al, 0                   ; null terminator?
+    je  .done
+    int 0x10                    ; print character in AL
+    jmp .loop
 .done:
     ret
 
 
+; -------------------------------------------------------
+; data
+; -------------------------------------------------------
+boot_drive      db 0            ; saved boot drive number
+mem_entry_count dw 0            ; number of E820 entries found
 
+buffer equ 0x0500               ; E820 entries stored here (free conventional memory)
 
-;=================================================================
-; DATA
-;=================================================================
+msg_start   db 'BL: started',     0x0D, 0x0A, 0
+msg_lba     db 'BL: LBA ok',      0x0D, 0x0A, 0
+msg_loaded  db 'BL: kernel loaded', 0x0D, 0x0A, 0
+msg_a20     db 'BL: A20 enabled',  0x0D, 0x0A, 0
+msg_mmap    db 'BL: mmap done',    0x0D, 0x0A, 0
+msg_pm      db 'BL: entering PM',  0x0D, 0x0A, 0
 
-
-boot_drive      db 0                       ; boot drive number saved from DL
-mem_entry_count dw 0                       ; number of E820 memory map entries detected
-
-buffer equ 0x0500                          
-
-welcome_msg  db 'Bootloader stage 1 started', 0x0D, 0x0A, 0   ; startup message
-
+; -------------------------------------------------------
+; DAP — Disk Address Packet for INT 13h extended read
+; size=16, reserved=0, sectors=1, dst=0x0000:0x1000 (0x10000), LBA=1
+; -------------------------------------------------------
 dap:
-    db 0x10, 0x00                          ; DAP size (16 bytes), reserved zero
-    dw 5                                   ; number of sectors to read
-    dw 0x0000                              ; destination offset
-    dw 0x1000                              ; destination segment → physical 0x10000
-    dq 1                                   ; LBA address of first sector to read
+    db 0x10, 0x00               ; DAP size = 16 bytes, reserved
+    dw 1                        ; number of sectors to read
+    dw 0x0000                   ; destination offset
+    dw 0x1000                   ; destination segment — physical 0x10000
+    dq 1                        ; LBA sector number to start reading from
 
-
-;=================================================================
-; GDT — Global Descriptor Table (flat 32-bit model)
-;=================================================================
+; -------------------------------------------------------
+; GDT — flat 32-bit model, two descriptors after null
+; code: base=0 limit=4GB executable readable ring0 32-bit
+; data: base=0 limit=4GB writable ring0 32-bit
+; -------------------------------------------------------
 gdt_start:
-    dq 0x0000000000000000                  ; null descriptor — required as first entry
-
+    dq 0x0000000000000000       ; null descriptor — required
 gdt_code:
-    dw 0xFFFF, 0x0000                      ; limit 4GB, base 0
-    db 0x00, 0b10011010, 0b11001111, 0x00  ; present, ring0, code, executable, readable, 4KB gran, 32-bit
-
+    dw 0xFFFF, 0x0000
+    db 0x00, 0b10011010, 0b11001111, 0x00
 gdt_data:
-    dw 0xFFFF, 0x0000                      ; limit 4GB, base 0
-    db 0x00, 0b10010010, 0b11001111, 0x00  ; present, ring0, data, writable, 4KB gran, 32-bit
-
+    dw 0xFFFF, 0x0000
+    db 0x00, 0b10010010, 0b11001111, 0x00
 gdt_end:
 
 gdt_descriptor:
-    dw gdt_end - gdt_start - 1            ; GDT size in bytes minus 1 (limit field)
-    dd gdt_start                           ; linear base address of GDT
+    dw gdt_end - gdt_start - 1  ; GDT size minus 1 (limit field)
+    dd gdt_start                ; linear base address of GDT
 
-
-
-
-;=================================================================
-; PADDING + BOOT SIGNATURE
-;=================================================================
-
-times 510 - ($ - $$) db 0                 ; pad remaining bytes to reach byte 510
-dw 0xAA55                                 ; boot signature — BIOS checks this to confirm bootable disk
+times 510 - ($ - $$) db 0      ; pad to 510 bytes
+dw 0xAA55                      ; boot signature — BIOS checks this
