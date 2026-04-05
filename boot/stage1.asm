@@ -43,7 +43,6 @@ start:
     mov si, dap
     int 0x13
     pop ds
-    jc  hang                    ; carry set means read failed
 
     mov si, msg_loaded
     call print
@@ -167,7 +166,7 @@ msg_pm      db 'BL: entering PM',  0x0D, 0x0A, 0
 ; -------------------------------------------------------
 dap:
     db 0x10, 0x00               ; DAP size = 16 bytes, reserved
-    dw 1                        ; number of sectors to read
+    dw 8                        ; number of sectors to read
     dw 0x0000                   ; destination offset
     dw 0x1000                   ; destination segment — physical 0x10000
     dq 1                        ; LBA sector number to start reading from
