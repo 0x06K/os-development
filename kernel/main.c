@@ -1,15 +1,16 @@
-#include <stdint.h>
+#include <vga/vga.h>
 
-volatile uint16_t *vga = (volatile uint16_t *)0xB8000;
 
-void main(void)
+__attribute__((section(".text.main")))
+void main()
 {
-    char *msg = "Hello friend!!";
-    uint8_t attr = 0x0F;
+    clear();
+    // %C takes fg color, bg color
+    printf("%CHello in red!%R\n",        VGA_LIGHT_RED,   VGA_BLACK);
+    printf("%CWarning: %s%R\n",          VGA_YELLOW,      VGA_BLACK, "check this");
+    printf("%CBlue on white bg%R\n",     VGA_BLUE,        VGA_WHITE);
+    printf("%CGreen: %d%R\n",            VGA_LIGHT_GREEN, VGA_BLACK, 42);
 
-    for (int i = 0; msg[i]; i++)
-        vga[i] = (uint16_t)(attr << 8) | msg[i];
-
-    for (;;)
-        __asm__ volatile ("hlt");
+    __asm__("cli");
+    __asm__("hlt");
 }
