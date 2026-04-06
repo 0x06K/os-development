@@ -1,7 +1,7 @@
 #include "vga.h"
 
 
-static uint8_t current_color = 0x0F;  // default white on black
+uint8_t current_color = (VGA_BLACK << 4) | VGA_GREEN;  // default white on black
 
 static int cursor_x = 0;
 static int cursor_y = 0;
@@ -32,47 +32,30 @@ static void vga_putchar(char c)
     }
 }
 
-static void vga_putstr(char *s)
+
+// ── printf helpers ───────────────────────────────────────────────────────────
+
+static void buf_reverse(char *buf, int len)
 {
-    if (!s) s = "(null)";
-    while (*s) vga_putchar(*s++);
+    for (int i = 0, j = len - 1; i < j; i++, j--)
+    { char t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
 }
 
-static void vga_putnbr_base(unsigned long n, int base, int upper)
+static void pad_print(const char *prefix, int prefix_len,
+                      const char *buf,    int buf_len,
+                      int width, int flag_left, int flag_zero)
 {
-    char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
-    char buf[64];
-    int  i = 0;
-
-    if (n == 0) { vga_putchar('0'); return; }
-    while (n > 0) { buf[i++] = digits[n % base]; n /= base; }
-    while (i--) vga_putchar(buf[i]);
+    int total = buf_len + prefix_len;
+    int pad   = width > total ? width - total : 0;
+    char pc   = (flag_zero && !flag_left) ? '0' : ' ';
+    if (!flag_left && pc == ' ') for (int i = 0; i < pad; i++) vga_putchar(' ');
+    for (int i = 0; i < prefix_len; i++) vga_putchar(prefix[i]);
+    if (!flag_left && pc == '0') for (int i = 0; i < pad; i++) vga_putchar('0');
+    for (int i = 0; i < buf_len;    i++) vga_putchar(buf[i]);
+    if  (flag_left)              for (int i = 0; i < pad; i++) vga_putchar(' ');
 }
 
-static void vga_putint(int n)
-{
-    if (n < 0) { vga_putchar('-'); vga_putnbr_base((unsigned long)-n, 10, 0); }
-    else        vga_putnbr_base((unsigned long)n, 10, 0);
-}
-
-static void vga_putfloat(double f)
-{
-    if (f < 0) { vga_putchar('-'); f = -f; }
-
-    long long int_part = (long long)f;
-    double    frac     = f - int_part;
-
-    vga_putnbr_base((unsigned long)int_part, 10, 0);
-    vga_putchar('.');
-
-    for (int d = 0; d < 6; d++)
-    {
-        frac *= 10;
-        int digit = (int)frac;
-        vga_putchar('0' + digit);
-        frac -= digit;
-    }
-}
+// ── printf ───────────────────────────────────────────────────────────────────
 
 void printf(char *fmt, ...)
 {
@@ -81,30 +64,181 @@ void printf(char *fmt, ...)
 
     for (char *p = fmt; *p; p++)
     {
-        if (*p != '%')      { vga_putchar(*p); continue; }
+        if (*p != '%') { vga_putchar(*p); continue; }
         p++;
-        if      (*p == 'd' || *p == 'i') vga_putint(va_arg(ap, int));
-        else if (*p == 'u')              vga_putnbr_base(va_arg(ap, unsigned int), 10, 0);
-        else if (*p == 'o')              vga_putnbr_base(va_arg(ap, unsigned int),  8, 0);
-        else if (*p == 'x')              vga_putnbr_base(va_arg(ap, unsigned int), 16, 0);
-        else if (*p == 'X')              vga_putnbr_base(va_arg(ap, unsigned int), 16, 1);
-        else if (*p == 'p')             { vga_putstr("0x"); vga_putnbr_base((unsigned long)va_arg(ap, void*), 16, 1); }
-        else if (*p == 's')              vga_putstr(va_arg(ap, char*));
-        else if (*p == 'c')              vga_putchar((char)va_arg(ap, int));
-        else if (*p == 'f')              vga_putfloat(va_arg(ap, double));
-        else if (*p == '%')              vga_putchar('%');
-        else if (*p == 'n')              (void)va_arg(ap, int*);
-        else if (*p == 'C')             // %C — set color, takes uint8_t fg, uint8_t bg
+
+        // ── flags ─────────────────────────────────────────────────────────
+        int flag_left  = 0;
+        int flag_zero  = 0;
+        int flag_plus  = 0;
+        int flag_space = 0;
+        int flag_hash  = 0;
+        while (*p == '-' || *p == '0' || *p == '+' || *p == ' ' || *p == '#')
+        {
+            if (*p == '-') flag_left  = 1;
+            if (*p == '0') flag_zero  = 1;
+            if (*p == '+') flag_plus  = 1;
+            if (*p == ' ') flag_space = 1;
+            if (*p == '#') flag_hash  = 1;
+            p++;
+        }
+
+        // ── width ─────────────────────────────────────────────────────────
+        int width = 0;
+        while (*p >= '0' && *p <= '9') width = width * 10 + (*p++ - '0');
+
+        // ── precision ─────────────────────────────────────────────────────
+        int precision = -1;
+        if (*p == '.') { p++; precision = 0; while (*p >= '0' && *p <= '9') precision = precision * 10 + (*p++ - '0'); }
+
+        // ── length modifier ───────────────────────────────────────────────
+        int is_long = 0;
+        if      (*p == 'l') { p++; if (*p == 'l') p++; is_long = 1; }
+        else if (*p == 'h') p++;
+
+        char spec = *p;
+        if (!spec) break;
+
+        // ── specifiers ────────────────────────────────────────────────────
+
+        if (spec == 'd' || spec == 'i')
+        {
+            long val = is_long ? va_arg(ap, long) : (long)va_arg(ap, int);
+            char prefix[4]; int prefix_len = 0;
+            char buf[32];   int buf_len    = 0;
+
+            if      (val < 0)     { prefix[prefix_len++] = '-'; val = -val; }
+            else if (flag_plus)     prefix[prefix_len++] = '+';
+            else if (flag_space)    prefix[prefix_len++] = ' ';
+
+            unsigned long uval = (unsigned long)val;
+            if (uval == 0) buf[buf_len++] = '0';
+            else while (uval) { buf[buf_len++] = '0' + (uval % 10); uval /= 10; }
+            buf_reverse(buf, buf_len);
+
+            pad_print(prefix, prefix_len, buf, buf_len, width, flag_left, flag_zero);
+        }
+        else if (spec == 'u')
+        {
+            unsigned long uval = is_long ? va_arg(ap, unsigned long)
+                                         : (unsigned long)va_arg(ap, unsigned int);
+            char buf[32]; int buf_len = 0;
+
+            if (uval == 0) buf[buf_len++] = '0';
+            else while (uval) { buf[buf_len++] = '0' + (uval % 10); uval /= 10; }
+            buf_reverse(buf, buf_len);
+
+            pad_print("", 0, buf, buf_len, width, flag_left, flag_zero);
+        }
+        else if (spec == 'o')
+        {
+            unsigned long uval = is_long ? va_arg(ap, unsigned long)
+                                         : (unsigned long)va_arg(ap, unsigned int);
+            char prefix[4]; int prefix_len = 0;
+            char buf[32];   int buf_len    = 0;
+
+            if (flag_hash && uval) prefix[prefix_len++] = '0';
+
+            if (uval == 0) buf[buf_len++] = '0';
+            else while (uval) { buf[buf_len++] = '0' + (uval % 8); uval /= 8; }
+            buf_reverse(buf, buf_len);
+
+            pad_print(prefix, prefix_len, buf, buf_len, width, flag_left, flag_zero);
+        }
+        else if (spec == 'x' || spec == 'X')
+        {
+            const char *digits = (spec == 'X') ? "0123456789ABCDEF" : "0123456789abcdef";
+            unsigned long uval = is_long ? va_arg(ap, unsigned long) : (unsigned long)va_arg(ap, unsigned int);
+
+            char prefix[4]; int prefix_len = 0;
+            char buf[32];   int buf_len    = 0;
+
+            if (flag_hash && uval)
+            { prefix[prefix_len++] = '0'; prefix[prefix_len++] = (spec == 'X') ? 'X' : 'x'; }
+
+            if (uval == 0) buf[buf_len++] = '0';
+            else while (uval) { buf[buf_len++] = digits[uval % 16]; uval /= 16; }
+            buf_reverse(buf, buf_len);
+
+            pad_print(prefix, prefix_len, buf, buf_len, width, flag_left, flag_zero);
+        }
+        else if (spec == 'p')
+        {
+            unsigned long uval = (unsigned long)va_arg(ap, void *);
+            char prefix[4]; int prefix_len = 0;
+            char buf[32];   int buf_len    = 0;
+
+            prefix[prefix_len++] = '0';
+            prefix[prefix_len++] = 'x';
+
+            if (uval == 0) buf[buf_len++] = '0';
+            else while (uval) { buf[buf_len++] = "0123456789abcdef"[uval % 16]; uval /= 16; }
+            buf_reverse(buf, buf_len);
+
+            pad_print(prefix, prefix_len, buf, buf_len, width, flag_left, flag_zero);
+        }
+        else if (spec == 's')
+        {
+            char *s = va_arg(ap, char *);
+            if (!s) s = "(null)";
+            int len = 0; while (s[len]) len++;
+            if (precision >= 0 && precision < len) len = precision;
+
+            int pad = width > len ? width - len : 0;
+            if (!flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
+            for (int i = 0; i < len; i++) vga_putchar(s[i]);
+            if  (flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
+        }
+        else if (spec == 'c')
+        {
+            char c = (char)va_arg(ap, int);
+            int pad = width > 1 ? width - 1 : 0;
+            if (!flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
+            vga_putchar(c);
+            if  (flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
+        }
+        else if (spec == 'f')
+        {
+            double f    = va_arg(ap, double);
+            int    prec = precision >= 0 ? precision : 6;
+            char prefix[4]; int prefix_len = 0;
+
+            if      (f < 0)      { prefix[prefix_len++] = '-'; f = -f; }
+            else if (flag_plus)    prefix[prefix_len++] = '+';
+            else if (flag_space)   prefix[prefix_len++] = ' ';
+
+            long   int_part = (long)f;
+            double frac     = f - (double)int_part;
+
+            char ibuf[32]; int ilen = 0;
+            if (int_part == 0) ibuf[ilen++] = '0';
+            else { long tmp = int_part; while (tmp) { ibuf[ilen++] = '0' + (tmp % 10); tmp /= 10; } }
+            buf_reverse(ibuf, ilen);
+
+            char fbuf[32]; int flen = 0;
+            for (int d = 0; d < prec; d++)
+            { frac *= 10; int digit = (int)frac; fbuf[flen++] = '0' + digit; frac -= digit; }
+
+            // combine integer + '.' + fraction into one buffer for pad_print
+            char combined[72]; int clen = 0;
+            for (int i = 0; i < ilen; i++) combined[clen++] = ibuf[i];
+            if (prec > 0) { combined[clen++] = '.'; for (int i = 0; i < flen; i++) combined[clen++] = fbuf[i]; }
+
+            pad_print(prefix, prefix_len, combined, clen, width, flag_left, flag_zero);
+        }
+        else if (spec == '%') vga_putchar('%');
+        else if (spec == 'n') (void)va_arg(ap, int *);
+        else if (spec == 'C')
         {
             uint8_t fg = (uint8_t)va_arg(ap, int);
             uint8_t bg = (uint8_t)va_arg(ap, int);
-            current_color = (bg << 4) | fg;  // color byte = [bg | fg]
+            current_color = (bg << 4) | fg;
         }
-        else if (*p == 'R')              current_color = 0x0F;  // %R — reset to default
+        else if (spec == 'R') current_color = 0x0F;
     }
 
     va_end(ap);
-}   
+}
 
 void clear(){
     unsigned short *vga = (unsigned short *)VGA_ADDRESS;
