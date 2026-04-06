@@ -86,7 +86,7 @@ start:
 
     mov si, msg_mmap
     call print
-
+    
     ; -------------------------------------------------------
     ; switch to 32-bit protected mode
     ; 1. interrupts must be off — IDT is not set up for PM yet
@@ -95,6 +95,7 @@ start:
     ; 4. far jump to flush prefetch queue and load CS with
     ;    code segment selector 0x08 (GDT entry 1)
     ; -------------------------------------------------------
+    
     cli
     lgdt [gdt_descriptor]       ; load GDT register
 
@@ -118,7 +119,7 @@ protected_mode_entry:
     mov ss, ax
 
     mov esp, 0x0000C000         ; set up 32-bit stack below kernel
-
+    
     jmp 0x10000                 ; jump to kernel entry point
 
 
@@ -166,7 +167,7 @@ msg_pm      db 'BL: entering PM',  0x0D, 0x0A, 0
 ; -------------------------------------------------------
 dap:
     db 0x10, 0x00               ; DAP size = 16 bytes, reserved
-    dw 8                        ; number of sectors to read
+    dw 100                        ; number of sectors to read
     dw 0x0000                   ; destination offset
     dw 0x1000                   ; destination segment — physical 0x10000
     dq 1                        ; LBA sector number to start reading from
