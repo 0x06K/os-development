@@ -10,7 +10,7 @@ AS      := nasm
 OBJCOPY := objcopy
 
 # Flags
-CFLAGS  := -ffreestanding -m32 -O0 -Wall -Wextra -I$(KERNEL_DIR)
+CFLAGS  := -ffreestanding -m32 -O0 -Wall -Wextra -g3 -I$(KERNEL_DIR)
 LDFLAGS := -m elf_i386 -T linker.ld
 
 # Files

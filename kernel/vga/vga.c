@@ -7,7 +7,7 @@ static int cursor_x = 0;
 static int cursor_y = 0;
 
 
-static void vga_putchar(char c)
+static void vga_putchar(uint8_t c)
 {
     unsigned short *vga = (unsigned short *)VGA_ADDRESS;
     if (c == '\n')
@@ -196,35 +196,6 @@ void printf(char *fmt, ...)
             if (!flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
             vga_putchar(c);
             if  (flag_left) for (int i = 0; i < pad; i++) vga_putchar(' ');
-        }
-        else if (spec == 'f')
-        {
-            double f    = va_arg(ap, double);
-            int    prec = precision >= 0 ? precision : 6;
-            char prefix[4]; int prefix_len = 0;
-
-            if      (f < 0)      { prefix[prefix_len++] = '-'; f = -f; }
-            else if (flag_plus)    prefix[prefix_len++] = '+';
-            else if (flag_space)   prefix[prefix_len++] = ' ';
-
-            long   int_part = (long)f;
-            double frac     = f - (double)int_part;
-
-            char ibuf[32]; int ilen = 0;
-            if (int_part == 0) ibuf[ilen++] = '0';
-            else { long tmp = int_part; while (tmp) { ibuf[ilen++] = '0' + (tmp % 10); tmp /= 10; } }
-            buf_reverse(ibuf, ilen);
-
-            char fbuf[32]; int flen = 0;
-            for (int d = 0; d < prec; d++)
-            { frac *= 10; int digit = (int)frac; fbuf[flen++] = '0' + digit; frac -= digit; }
-
-            // combine integer + '.' + fraction into one buffer for pad_print
-            char combined[72]; int clen = 0;
-            for (int i = 0; i < ilen; i++) combined[clen++] = ibuf[i];
-            if (prec > 0) { combined[clen++] = '.'; for (int i = 0; i < flen; i++) combined[clen++] = fbuf[i]; }
-
-            pad_print(prefix, prefix_len, combined, clen, width, flag_left, flag_zero);
         }
         else if (spec == '%') vga_putchar('%');
         else if (spec == 'n') (void)va_arg(ap, int *);

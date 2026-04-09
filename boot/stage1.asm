@@ -86,7 +86,7 @@ start:
 
     mov si, msg_mmap
     call print
-    
+
     ; -------------------------------------------------------
     ; switch to 32-bit protected mode
     ; 1. interrupts must be off — IDT is not set up for PM yet
