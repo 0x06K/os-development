@@ -31,6 +31,6 @@
 
 
 void clear();
-void printf(char *fmt, ...);
+void kprintf(const char *fmt, ...);
 
 #endif

@@ -12,8 +12,21 @@ static void vga_putchar(uint8_t c)
     unsigned short *vga = (unsigned short *)VGA_ADDRESS;
     if (c == '\n')
     {
-        cursor_x = 0;
-        cursor_y++;
+        cursor_x = 0; cursor_y++;
+    } 
+    else if (c == '\b')
+    {
+        if (cursor_x > 0)
+        {
+            cursor_x--;
+        }
+        else if (cursor_y > 0)
+        {
+            cursor_y--;
+            cursor_x = VGA_WIDTH - 1;
+        }
+
+        vga[cursor_y * VGA_WIDTH + cursor_x] = ' ';
     }
     else
     {
@@ -33,7 +46,7 @@ static void vga_putchar(uint8_t c)
 }
 
 
-// ── printf helpers ───────────────────────────────────────────────────────────
+// ── kprintf helpers ───────────────────────────────────────────────────────────
 
 static void buf_reverse(char *buf, int len)
 {
@@ -55,9 +68,9 @@ static void pad_print(const char *prefix, int prefix_len,
     if  (flag_left)              for (int i = 0; i < pad; i++) vga_putchar(' ');
 }
 
-// ── printf ───────────────────────────────────────────────────────────────────
+// ── kprintf ───────────────────────────────────────────────────────────────────
 
-void printf(char *fmt, ...)
+void kprintf(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);

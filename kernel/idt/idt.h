@@ -2,6 +2,8 @@
 #ifndef IDT_H
 #define IDT_H
 
+#include<stdint.h>
+
 typedef struct __attribute__((packed))
 {
     uint16_t offset_low;   // lower 16 bits of handler address  (where to jump - part 1)
@@ -18,7 +20,7 @@ typedef struct __attribute__((packed))
     uint32_t base;    // address of the IDT array
 } IDT_Ptr;
 
-
+void idt_set_entry(uint8_t idx, void *handler, uint8_t type_attr);
 void idt_init(void);
 
 #endif
