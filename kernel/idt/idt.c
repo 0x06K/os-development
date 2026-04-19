@@ -39,6 +39,7 @@ void idt_init(void)
     idt_set_entry(32, (void*)timer_handler,    0x8E);  // ring 0 interrupt gate
     idt_set_entry(33, (void*)keyboard_handler, 0x8E);  // ring 0 interrupt gate
     idt_set_entry(128, (void*)syscall_stub, 0xEE);
+    idt_set_entry(46,  (void*)irq14_handler,    0x8E);
 
     asm volatile("lidt %0" : : "m"(idt_ptr));
 }

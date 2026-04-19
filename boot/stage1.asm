@@ -1,7 +1,10 @@
 [ORG 0x7C00]
 [BITS 16]
 
-jmp 0:start
+jmp short start    ; 2 bytes
+nop                ; 1 byte  → total 3 bytes, BPB starts at byte 3
+
+times 90-($-$$) db 0   ; reserve bytes 3–89 for BPB (mkfs.fat writes here)
 
 start:
     cli                         ; disable interrupts during setup

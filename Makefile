@@ -1,65 +1,96 @@
-# Directories
-BOOT_DIR    := boot
-KERNEL_DIR  := kernel
-OBJ_DIR     := obj
+# ─────────────────────────────────────────
+#  DIRECTORIES
+# ─────────────────────────────────────────
+BOOT_DIR   := boot
+KERNEL_DIR := kernel
+OBJ_DIR    := obj
 
-# Tools
+# ─────────────────────────────────────────
+#  TOOLS
+# ─────────────────────────────────────────
 CC      := i386-elf-gcc
 LD      := i386-elf-ld
 AS      := nasm
 OBJCOPY := objcopy
 
-# Flags
+# ─────────────────────────────────────────
+#  FLAGS
+# ─────────────────────────────────────────
 CFLAGS  := -ffreestanding -m32 -O0 -Wall -Wextra -g3 -I$(KERNEL_DIR)
 LDFLAGS := -m elf_i386 -T linker.ld
 
-# Files
-BL_ASM  := $(BOOT_DIR)/stage1.asm
-BL_OBJ  := $(OBJ_DIR)/stage1.bin
-KERNEL_ELF      := $(OBJ_DIR)/kernel.elf
-KERNEL_RAW      := $(OBJ_DIR)/kernel.raw
-OS_IMAGE        := $(OBJ_DIR)/os.img
+# ─────────────────────────────────────────
+#  FILES
+# ─────────────────────────────────────────
+BL_ASM     := $(BOOT_DIR)/stage1.asm
+BL_BIN     := $(OBJ_DIR)/stage1.bin
+KERNEL_ELF := $(OBJ_DIR)/kernel.elf
+KERNEL_RAW := $(OBJ_DIR)/kernel.raw
+OS_IMAGE   := $(OBJ_DIR)/os.img
 
-# automatically finds all .c files in kernel/
+# ─────────────────────────────────────────
+#  SOURCE DISCOVERY
+# ─────────────────────────────────────────
 SRCS       := $(shell find $(KERNEL_DIR) -name "*.c")
 KERNEL_OBJ := $(patsubst $(KERNEL_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
-
-# Default target
+# ─────────────────────────────────────────
+#  DEFAULT TARGET
+# ─────────────────────────────────────────
 all: $(OS_IMAGE)
 
-# Ensure obj directory exists
+# ─────────────────────────────────────────
+#  CREATE OBJ DIRECTORY
+# ─────────────────────────────────────────
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-# creates obj/vga/vga.o  obj/io/io.o etc — no collisions
+# ─────────────────────────────────────────
+#  COMPILE C FILES
+# ─────────────────────────────────────────
 $(OBJ_DIR)/%.o: $(KERNEL_DIR)/%.c | $(OBJ_DIR)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-
-# Assemble entry
-$(BL_OBJ): $(BL_ASM) | $(OBJ_DIR)
+# ─────────────────────────────────────────
+#  ASSEMBLE BOOTLOADER
+# ─────────────────────────────────────────
+$(BL_BIN): $(BL_ASM) | $(OBJ_DIR)
 	$(AS) -f bin $< -o $@
 
-# Link kernel
+# ─────────────────────────────────────────
+#  LINK KERNEL
+# ─────────────────────────────────────────
 $(KERNEL_ELF): $(KERNEL_OBJ)
 	$(LD) $(LDFLAGS) -o $@ $^
 
-# Convert ELF → raw binary
+# ─────────────────────────────────────────
+#  ELF → RAW BINARY
+# ─────────────────────────────────────────
 $(KERNEL_RAW): $(KERNEL_ELF)
 	$(OBJCOPY) -O binary $< $@
 
-# Build OS image
-$(OS_IMAGE): $(KERNEL_RAW) | $(OBJ_DIR)
-	$(eval KERNEL_SECTORS := $(shell python3 -c "import math, os; print(max(1, math.ceil(os.path.getsize('$(KERNEL_RAW)') / 512)))"))
-	$(AS) -f bin $(BL_ASM) -DKERNEL_SECTORS=$(KERNEL_SECTORS) -o $(BL_OBJ)
-	cat $(BL_OBJ) $(KERNEL_RAW) > $(OS_IMAGE)
+compile: $(KERNEL_RAW) $(BL_BIN)
 
-# Run in QEMU
+$(OS_IMAGE): $(BL_BIN) $(KERNEL_RAW)
+	dd if=/dev/zero of=$(OS_IMAGE) bs=1M count=32
+	mkfs.fat -F 32 $(OS_IMAGE)
+	dd if=$(BL_BIN) of=$(OS_IMAGE) bs=1 count=3 conv=notrunc
+	dd if=$(BL_BIN) of=$(OS_IMAGE) bs=1 skip=90 seek=90 count=356 conv=notrunc
+	dd if=$(KERNEL_RAW) of=$(OS_IMAGE) bs=512 seek=1 conv=notrunc
+	sudo mount -o loop $(OS_IMAGE) /mnt/os
+	echo "hello from fat32" | sudo tee /mnt/os/test.txt
+	sudo umount /mnt/os
+# ─────────────────────────────────────────
+#  RUN
+# ─────────────────────────────────────────
 run: $(OS_IMAGE)
 	qemu-system-i386 -drive format=raw,file=$(OS_IMAGE)
 
-# Clean
+# ─────────────────────────────────────────
+#  CLEAN
+# ─────────────────────────────────────────
 clean:
 	rm -rf $(OBJ_DIR)
+
+.PHONY: all run clean

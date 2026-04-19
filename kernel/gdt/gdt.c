@@ -19,12 +19,12 @@ void gdt_set_entry(int i, uint32_t base, uint32_t limit, uint8_t access, uint8_t
 
 void gdt_init(void)
 {
-    gdt_set_entry(0, 0,          0,          0x00, 0x0); // null
-    gdt_set_entry(1, 0, 0x003FFFFF, 0x9A, 0xC); // kernel code  base=64KB  limit=4MB
-    gdt_set_entry(2, 0, 0x003FFFFF, 0x92, 0xC); // kernel data  base=64KB  limit=4MB
-    gdt_set_entry(3, 0x00400000, 0xFFFFFFFF, 0xFA, 0xC); // user code    base=4MB   limit=2GB
-    gdt_set_entry(4, 0x00400000, 0xFFFFFFFF, 0xF2, 0xC); // user data    base=4MB   limit=2GB
-
+    gdt_set_entry(0, 0, 0x00000000, 0x00, 0x0); // null
+    gdt_set_entry(1, 0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code  base=0 limit=4GB
+    gdt_set_entry(2, 0, 0xFFFFFFFF, 0x92, 0xC); // kernel data  base=0 limit=4GB
+    gdt_set_entry(3, 0, 0xFFFFFFFF, 0xFA, 0xC); // user code    base=0 limit=4GB
+    gdt_set_entry(4, 0, 0xFFFFFFFF, 0xF2, 0xC); // user data    base=0 limit=4GB
+    
     gdt_ptr.limit = (sizeof(GDT_Entry) * GDT_ENTRIES) - 1;
     gdt_ptr.base  = (uint32_t)&gdt;
 

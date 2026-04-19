@@ -56,5 +56,11 @@ void syscall_stub(void) {
     );
 }
 
-
-
+extern volatile uint8_t status;
+__attribute__((interrupt))
+void irq14_handler(interrupt_frame* frame) {
+    outb(0x20, 0x20);   // EOI to master PIC
+    outb(0xA0, 0x20);   // EOI to slave PIC    
+    (void)frame;
+    status = 1;
+}

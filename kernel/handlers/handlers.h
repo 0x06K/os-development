@@ -31,4 +31,8 @@ void syscall_handler(registers_t regs);
 __attribute__((naked)) void syscall_stub(void);
 
 
+__attribute__((interrupt))
+void irq14_handler(interrupt_frame* frame);
+
+
 #endif
