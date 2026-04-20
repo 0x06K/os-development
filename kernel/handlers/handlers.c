@@ -36,16 +36,26 @@ void timer_handler(interrupt_frame *frame)
 
 
 
-void syscall_handler(registers_t regs) {
-    switch (regs.eax) {
-        case 0:
-            for(;;) asm volatile("hlt");
-            break;
-        case 1:
-            kprintf((const char*)regs.ebx);
-            break;
+// table of kernel functions, index = syscall number
+typedef int (*syscall_fn)(uint32_t, uint32_t, uint32_t);
+
+static syscall_fn syscall_table[] = {
+    [0] = (syscall_fn)kprintf,
+    [1] = (syscall_fn)kgets,
+};
+
+void syscall_handler(registers_t *regs) {
+    uint32_t num = regs->eax;  // get syscall number
+
+    // bounds check + null check
+    if (num < sizeof(syscall_table)/sizeof(syscall_table[0]) && syscall_table[num]) {
+        // call the function, pass EBX, ECX, EDX as args
+        regs->eax = syscall_table[num](regs->ebx, regs->ecx, regs->edx);
+    } else {
+        regs->eax = -1;  // unknown syscall
     }
 }
+
 __attribute__((naked))
 void syscall_stub(void) {
     asm volatile(

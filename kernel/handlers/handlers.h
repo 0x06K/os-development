@@ -27,7 +27,7 @@ typedef struct {
 } registers_t;
 
 
-void syscall_handler(registers_t regs);
+void syscall_handler(registers_t *regs);
 __attribute__((naked)) void syscall_stub(void);
 
 

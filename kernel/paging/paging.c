@@ -56,6 +56,7 @@ void paging_init(void) {
     cr0 |= 0x80000000;
     asm volatile("mov %0, %%cr0" : : "r"(cr0));
 }
+
 void map_page(uint32_t vaddr, uint32_t paddr, uint32_t flags) {
     uint32_t pd_i = vaddr >> 22;
     uint32_t pt_i = (vaddr >> 12) & 0x3FF;

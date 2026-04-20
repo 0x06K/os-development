@@ -5,11 +5,12 @@
 #include <tss/tss.h>
 #include <frames/frames.h>
 #include <filesystem/filesystem.h>
+#include <loader/loader.h>
 
-extern void user_program(void);
 
-#define USER_EIP (uint32_t)user_program
-#define USER_ESP 0xBFFFFFF0
+#define USER_LOAD_ADDR  0x40000000   // where the program is loaded in memory
+#define USER_STACK_ADDR 0xF0000000   // top of user stack
+
 
 __attribute__((section(".text.main")))
 void main()
@@ -39,6 +40,16 @@ void main()
     fs_init();
     ls();
 
+    file_info f = find_file("user.o");
+    if (f.start_cluster == 0) {
+        kprintf("file not found\n");
+    }
+    kprintf("found at cluster=%d size=%d\n", f.start_cluster, f.size);
+    
+    uint8_t *load_addr = (uint8_t *)0x40000000;
+    load_file(&f, load_addr);
+    kprintf("loaded %d bytes at 0x40000000\n", f.size);
+    load_and_run(&f, (uint8_t*)USER_LOAD_ADDR, USER_STACK_ADDR);
     kprintf("$ ");
     while(1)__asm__("hlt");
 }

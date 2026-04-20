@@ -35,8 +35,8 @@ struct fat32_fs {
 };
 
 struct __attribute__((packed)) dir_entry {
-    char     name[8];               // offset 0
-    char     ext[3];                // offset 8
+    uint8_t     name[8];               // offset 0
+    uint8_t     ext[3];                // offset 8
     uint8_t  attributes;            // offset 11
     uint8_t  reserved;              // offset 12
     uint8_t  creation_time_ms;      // offset 13
@@ -49,8 +49,17 @@ struct __attribute__((packed)) dir_entry {
     uint16_t cluster_low;           // offset 26
     uint32_t size;                  // offset 28
 };                                  // total = 32 bytes
+
+typedef struct {
+    uint32_t start_cluster;
+    uint32_t size;
+} file_info;
+
+
 void read_sector(uint32_t lba_addr, uint8_t* buffer);
 void write_sector(uint32_t lba_addr, uint8_t *data);
+file_info find_file(const char *name);
+uint32_t read_fat_entry(uint32_t cluster);
 void fs_init();
 void ls();
 

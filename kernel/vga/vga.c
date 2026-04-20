@@ -6,6 +6,17 @@ uint8_t current_color = (VGA_BLACK << 4) | VGA_GREEN;  // default white on black
 static int cursor_x = 0;
 static int cursor_y = 0;
 
+extern void outb(uint16_t port, uint8_t value);
+
+void update_cursor(int row, int col) {
+    uint16_t pos = row * 80 + col;
+    
+
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t)(pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+}
 
 static void vga_putchar(uint8_t c)
 {
@@ -43,6 +54,7 @@ static void vga_putchar(uint8_t c)
             vga[(VGA_HEIGHT - 1) * VGA_WIDTH + j] = (current_color << 8) | ' ';
         cursor_y = VGA_HEIGHT - 1;
     }
+    update_cursor(cursor_y, cursor_x);
 }
 
 
@@ -220,7 +232,6 @@ void kprintf(const char *fmt, ...)
         }
         else if (spec == 'R') current_color = 0x0F;
     }
-
     va_end(ap);
 }
 
@@ -229,4 +240,7 @@ void clear(){
     for (int i = 0; i < VGA_HEIGHT; i++)
         for (int j = 0; j < VGA_WIDTH; j++)
             vga[i * VGA_WIDTH + j] = ' ';
+
+    cursor_x = 0;
+    cursor_y = 0;
 }

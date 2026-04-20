@@ -142,7 +142,7 @@ void ls() {
 
             for (int i = 0; i < 16; i++) {
                 if (entries[i].name[0] == 0x00) return;  // end of directory
-                if (entries[i].name[0] == (uint8_t)0xE5) continue; // deleted
+                if (entries[i].name[0] == 0xE5) continue; // deleted
 
                 uint32_t entry_cluster = ((uint32_t)entries[i].cluster_high << 16) | entries[i].cluster_low;
 
@@ -156,4 +156,83 @@ void ls() {
         // follow FAT chain to next cluster
         cluster = read_fat_entry(cluster);
     }
+}
+
+int match_83(const char *input, const char *fat_name) {
+    char converted[12];
+    int i = 0, j = 0;
+
+    // copy name part (up to 8 chars, pad with spaces)
+    while (i < 8) {
+        if (input[j] == '.' || input[j] == '\0') {
+            converted[i++] = ' ';
+        } else {
+            // uppercase
+            char c = input[j++];
+            if (c >= 'a' && c <= 'z') c -= 32;
+            converted[i++] = c;
+        }
+    }
+
+    // skip the dot
+    while (input[j] && input[j] != '.') j++;
+    if (input[j] == '.') j++;
+
+    // copy extension (up to 3 chars, pad with spaces)
+    for (int k = 0; k < 3; k++) {
+        if (input[j] == '\0') {
+            converted[8 + k] = ' ';
+        } else {
+            char c = input[j++];
+            if (c >= 'a' && c <= 'z') c -= 32;
+            converted[8 + k] = c;
+        }
+    }
+    converted[11] = '\0';
+
+    // compare
+    for (int k = 0; k < 11; k++) {
+        if (converted[k] != fat_name[k]) return 0;
+    }
+    return 1;
+}
+
+file_info find_file(const char *name) {
+    file_info result = {0, 0};
+    uint32_t cluster = fs.root_cluster;
+
+    while (cluster < 0x0FFFFFF8) {
+        uint32_t sector = fs.data_start + (cluster - 2) * fs.sectors_per_cluster;
+
+        for (uint32_t s = 0; s < fs.sectors_per_cluster; s++) {
+            uint8_t dir_buffer[512];
+            read_sector(sector + s, dir_buffer);
+
+            struct dir_entry *entries = (struct dir_entry *)dir_buffer;
+
+            for (int i = 0; i < 16; i++) {
+                if (entries[i].name[0] == 0x00) return result;  // end
+                if (entries[i].name[0] == 0xE5) continue; // deleted
+
+                // build "NAME    EXT" style string to compare
+                char fname[12];
+                for (int j = 0; j < 8; j++) fname[j] = entries[i].name[j];
+                fname[8]  = entries[i].ext[0];
+                fname[9]  = entries[i].ext[1];
+                fname[10] = entries[i].ext[2];
+                fname[11] = '\0';
+
+                // compare against input name
+                // input "shell.bin" → "SHELL   BIN"
+                if (match_83(name, fname)) {
+                    result.start_cluster = ((uint32_t)entries[i].cluster_high << 16)
+                                          | entries[i].cluster_low;
+                    result.size = entries[i].size;
+                    return result;
+                }
+            }
+        }
+        cluster = read_fat_entry(cluster);
+    }
+    return result;  // not found, both fields 0
 }

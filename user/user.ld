@@ -1,9 +1,8 @@
 ENTRY(user_program)
 
 SECTIONS {
-    . = 0x00400000;
+    . = 0x40000000;
     .text  : { *(.text)  }
     .data  : { *(.data)  }
-    .rodata: { *(.rodata)}
     .bss   : { *(.bss)   }
 }

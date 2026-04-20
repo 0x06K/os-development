@@ -6,10 +6,12 @@
 void user_program(void) {
     char *msg = "Hello Friend";
 
-    asm volatile(
+    __asm__ volatile (
         "int $0x80"
-        :
-        : "a"(1), "b"(msg)
+        :                        // no outputs
+        : "a"(1),                // EAX = syscall number
+          "b"(msg)               // EBX = string pointer
+        : "memory"
     );
 
     while(1);
