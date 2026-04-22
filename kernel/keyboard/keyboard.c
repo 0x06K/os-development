@@ -30,7 +30,7 @@ void keyboard_push(uint8_t scancode)
 
 char kgetchar(void)
 {
-    while (kbd_head == kbd_tail){__asm__("hlt");}             // block until key available
+    while (kbd_head == kbd_tail){    __asm__ volatile ("sti; hlt" : : : "memory"); }             // block until key available
     char c = kbd_buf[kbd_tail];
     kbd_tail = (kbd_tail + 1) % BUF_SIZE;
     return c;

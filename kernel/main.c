@@ -9,7 +9,7 @@
 
 
 #define USER_LOAD_ADDR  0x40000000   // where the program is loaded in memory
-#define USER_STACK_ADDR 0xF0000000   // top of user stack
+#define USER_STACK_ADDR 0x50000000   // top of user stack
 
 
 __attribute__((section(".text.main")))
@@ -17,12 +17,9 @@ void main()
 {
     // clear screen
     clear();
-
     kprintf("%CExecuting main() at address: %p\n", VGA_GREEN, VGA_BLACK, (void*)main);
     
-    // initializing the idt
-    kprintf("Initializing Interrupt Discriptor Table.\n");
-    idt_init();
+
     // initializing gdt 
     kprintf("Initializing Global Discriptor Table.\n");
     gdt_init();
@@ -35,12 +32,17 @@ void main()
     kprintf("Initializing Physical Frames Manager.\n");
     frame_init();
 
+    // initializing the idt
+    kprintf("Initializing Interrupt Discriptor Table.\n");
+    idt_init();
     __asm__("sti");
 
+    
+    
     fs_init();
     ls();
-
-    file_info f = find_file("user.o");
+    
+    file_info f = find_file("user.bin");
     if (f.start_cluster == 0) {
         kprintf("file not found\n");
     }
@@ -49,6 +51,7 @@ void main()
     uint8_t *load_addr = (uint8_t *)0x40000000;
     load_file(&f, load_addr);
     kprintf("loaded %d bytes at 0x40000000\n", f.size);
+    // while(1);
     load_and_run(&f, (uint8_t*)USER_LOAD_ADDR, USER_STACK_ADDR);
     kprintf("$ ");
     while(1)__asm__("hlt");

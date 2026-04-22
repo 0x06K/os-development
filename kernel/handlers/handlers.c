@@ -5,6 +5,12 @@
 
 extern void keyboard_push(uint8_t scancode);
 
+
+#define PIC1_COMMAND  0x20   // master PIC
+#define PIC2_COMMAND  0xA0   // slave PIC
+#define PIC_EOI       0x20   // EOI command byte
+
+
 uint8_t inb(uint16_t port)
 {
     uint8_t value;
@@ -17,16 +23,19 @@ void outb(uint16_t port, uint8_t value)
     asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
-
-__attribute__((interrupt)) 
-void keyboard_handler(interrupt_frame *frame)
-{
-    (void)frame;
-    uint8_t sc = inb(0x60);
-    keyboard_push(sc);
-    outb(0x20, 0x20);
+void send_eoi(uint8_t irq) {
+    if (irq >= 8)
+        outb(PIC2_COMMAND, PIC_EOI);  // must also ack slave PIC
+    outb(PIC1_COMMAND, PIC_EOI);      // always ack master PIC
 }
 
+
+__attribute__((interrupt)) 
+void keyboard_handler(interrupt_frame *frame) {
+    uint8_t scancode = inb(0x60);
+    send_eoi(1);                   // EOI first — re-enables PIC line
+    keyboard_push(scancode);       // then process
+}
 __attribute__((interrupt))
 void timer_handler(interrupt_frame *frame)
 {
@@ -60,7 +69,9 @@ __attribute__((naked))
 void syscall_stub(void) {
     asm volatile(
         "pusha              \n"
+        "push %esp         \n"
         "call syscall_handler\n"
+        "add $4, %esp       \n"
         "popa               \n"
         "iret               \n"
     );
