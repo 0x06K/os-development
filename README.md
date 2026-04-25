@@ -1,5 +1,8 @@
 # :)
+
 The script (setup-tools.sh) fetches the latest GCC and Binutils from the GNU FTP, builds them from source, and installs NASM, QEMU, GDB, and Make alongside them. When it's done, you can use the Makefile to compile and run the code. 
+
+![alt text](image-1.png)
 
 ## Usage
 <pre><code>chmod +x setup-tools.sh

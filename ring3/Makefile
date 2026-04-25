@@ -1,60 +1,63 @@
 # ─────────────────────────────────────────
-#  TOP-LEVEL MAKEFILE
-#  ./
-#  ├── ring0/   (kernel)
-#  └── ring3/   (userspace)
+#  DIRECTORIES
 # ─────────────────────────────────────────
-
-RING0_DIR  := ring0
-RING3_DIR  := ring3/user
-OS_IMAGE   := $(RING0_DIR)/obj/os.img
-USER_BIN   := $(RING3_DIR)/obj/user.bin
-MOUNT_POINT := /mnt/os
+USER_DIR := user
+OBJ_DIR  := obj
 
 # ─────────────────────────────────────────
-#  DEFAULT — build everything
+#  TOOLS
 # ─────────────────────────────────────────
-all: kernel user image
+CC      := i386-elf-gcc
+LD      := i386-elf-ld
+OBJCOPY := objcopy
 
 # ─────────────────────────────────────────
-#  BUILD KERNEL
+#  FLAGS
 # ─────────────────────────────────────────
-kernel:
-	$(MAKE) -C $(RING0_DIR)
+CFLAGS  := -ffreestanding -m32 -O0 -Wall -Wextra -g3 -I$(USER_DIR)
+LDFLAGS := -m elf_i386 -T user.ld
 
 # ─────────────────────────────────────────
-#  BUILD USERSPACE
+#  SOURCE DISCOVERY
 # ─────────────────────────────────────────
-user:
-	$(MAKE) -C $(RING3_DIR)
+SRCS := $(shell find $(USER_DIR) -name "*.c")
+OBJS := $(patsubst $(USER_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 # ─────────────────────────────────────────
-#  COPY USER BINARY INTO OS IMAGE
+#  OUTPUT
 # ─────────────────────────────────────────
-image: $(OS_IMAGE) $(USER_BIN)
-	sudo mkdir -p $(MOUNT_POINT)
-	sudo mount -o loop $(OS_IMAGE) $(MOUNT_POINT)
-	sudo cp $(USER_BIN) $(MOUNT_POINT)/
-	sudo umount $(MOUNT_POINT)
+USER_ELF := $(OBJ_DIR)/user.elf
+USER_BIN := $(OBJ_DIR)/user.bin
 
 # ─────────────────────────────────────────
-#  RUN IN QEMU
+#  DEFAULT
 # ─────────────────────────────────────────
-run: all
-	qemu-system-i386 -drive format=raw,file=$(OS_IMAGE)
+all: $(USER_BIN)
 
 # ─────────────────────────────────────────
-#  DEBUG — run with GDB stub
+#  COMPILE
 # ─────────────────────────────────────────
-debug: all
-	qemu-system-i386 -drive format=raw,file=$(OS_IMAGE) \
-		-s -S -no-reboot -no-shutdown
+$(OBJ_DIR)/%.o: $(USER_DIR)/%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # ─────────────────────────────────────────
-#  CLEAN EVERYTHING
+#  LINK
+# ─────────────────────────────────────────
+$(USER_ELF): $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+# ─────────────────────────────────────────
+#  ELF → FLAT BINARY
+# ─────────────────────────────────────────
+$(USER_BIN): $(USER_ELF)
+	$(OBJCOPY) -O binary $< $@
+	@echo "user binary: $(USER_BIN) $$(du -sh $(USER_BIN) | cut -f1)"
+
+# ─────────────────────────────────────────
+#  CLEAN
 # ─────────────────────────────────────────
 clean:
-	$(MAKE) -C $(RING0_DIR) clean
-	$(MAKE) -C $(RING3_DIR) clean
+	rm -rf $(OBJ_DIR)
 
-.PHONY: all kernel user image run debug clean
+.PHONY: all clean
